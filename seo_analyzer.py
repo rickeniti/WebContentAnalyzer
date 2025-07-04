@@ -132,10 +132,10 @@ class SEOAnalyzer:
         for hidden in soup.find_all(attrs={'style': re.compile(r'display\s*:\s*none', re.I)}):
             hidden.decompose()
         
-        # Get text content
-        text = soup.get_text()
+        # Get text content with better spacing
+        text = soup.get_text(separator=' ', strip=True)
         
-        # Clean up whitespace
+        # Clean up whitespace but preserve sentence structure
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
         
@@ -166,10 +166,18 @@ class SEOAnalyzer:
         if not keyword:
             return 0
         
-        # Create regex pattern for whole word matching
-        pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
-        matches = re.findall(pattern, text.lower())
-        return len(matches)
+        keyword = keyword.strip().lower()
+        text = text.lower()
+        
+        # Handle multi-word keywords differently
+        if ' ' in keyword:
+            # For multi-word keywords, use simple substring matching
+            return text.count(keyword)
+        else:
+            # For single words, use word boundary matching
+            pattern = r'\b' + re.escape(keyword) + r'\b'
+            matches = re.findall(pattern, text)
+            return len(matches)
     
     def _count_related_keywords(self, text: str, keywords: List[str]) -> Dict[str, int]:
         """Count frequency of related keywords"""
@@ -232,8 +240,16 @@ class SEOAnalyzer:
     
     def _generate_clean_body_sample(self, text: str, max_length: int = 500) -> str:
         """Generate a clean body text sample for style analysis"""
-        # Remove extra whitespace
+        # Remove extra whitespace and normalize
         text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Remove common noise that might appear at the beginning
+        # (like navigation text, headers, etc.)
+        sentences = text.split('.')
+        if len(sentences) > 1:
+            # Skip very short first sentences that might be navigation
+            if len(sentences[0]) < 20 and len(sentences) > 2:
+                text = '.'.join(sentences[1:]).strip()
         
         # If text is shorter than max_length, return as is
         if len(text) <= max_length:
@@ -249,7 +265,7 @@ class SEOAnalyzer:
         
         best_break = max(last_period, last_exclamation, last_question)
         
-        if best_break > max_length * 0.7:  # Only break if it's reasonably close to max_length
+        if best_break > max_length * 0.6:  # Only break if it's reasonably close to max_length
             return truncated[:best_break + 1].strip()
         
         # Otherwise, break at last space
