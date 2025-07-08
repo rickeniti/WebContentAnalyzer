@@ -119,21 +119,26 @@ class SEOAnalyzer:
         return "informational"
     
     def _extract_clean_text(self, soup: BeautifulSoup) -> str:
-        """Extract clean text content from HTML"""
-        # Remove script and style elements
-        for script in soup(["script", "style", "noscript"]):
+        """Extract clean text content from HTML body only"""
+        # Find the body tag, if it doesn't exist, use the whole document
+        body = soup.find('body')
+        if not body:
+            body = soup
+        
+        # Remove script and style elements from body
+        for script in body(["script", "style", "noscript"]):
             script.decompose()
         
-        # Remove comments
-        for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        # Remove comments from body
+        for comment in body.find_all(string=lambda text: isinstance(text, Comment)):
             comment.extract()
         
-        # Remove hidden elements
-        for hidden in soup.find_all(attrs={'style': re.compile(r'display\s*:\s*none', re.I)}):
+        # Remove hidden elements from body
+        for hidden in body.find_all(attrs={'style': re.compile(r'display\s*:\s*none', re.I)}):
             hidden.decompose()
         
-        # Get text content with better spacing
-        text = soup.get_text(separator=' ', strip=True)
+        # Get text content with better spacing from body only
+        text = body.get_text(separator=' ', strip=True)
         
         # Clean up whitespace but preserve sentence structure
         text = re.sub(r'\s+', ' ', text)
