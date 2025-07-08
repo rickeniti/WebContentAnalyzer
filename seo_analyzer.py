@@ -238,32 +238,10 @@ class SEOAnalyzer:
         
         return False
     
-    def _generate_clean_body_sample(self, text: str, max_length: int = 1000) -> str:
-        """Generate a clean body text sample for style analysis"""
+    def _generate_clean_body_sample(self, text: str, max_length: int = None) -> str:
+        """Generate complete clean body text for analysis"""
         # Remove extra whitespace and normalize
         text = re.sub(r'\s+', ' ', text).strip()
         
-        # If text is shorter than max_length, return complete text
-        if len(text) <= max_length:
-            return text
-        
-        # For longer text, find a good breaking point
-        truncated = text[:max_length]
-        
-        # Try to break at sentence end
-        last_period = truncated.rfind('.')
-        last_exclamation = truncated.rfind('!')
-        last_question = truncated.rfind('?')
-        
-        best_break = max(last_period, last_exclamation, last_question)
-        
-        # If we found a good sentence break point, use it
-        if best_break > max_length * 0.5:
-            return truncated[:best_break + 1].strip()
-        
-        # Otherwise, break at last space and add ellipsis
-        last_space = truncated.rfind(' ')
-        if last_space > 0:
-            return truncated[:last_space].strip() + "..."
-        
-        return truncated + "..."
+        # Return the complete text without any truncation
+        return text
