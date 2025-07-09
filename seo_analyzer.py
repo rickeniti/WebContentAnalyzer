@@ -127,7 +127,7 @@ class SEOAnalyzer:
         return "informational"
     
     def _extract_clean_text(self, soup: BeautifulSoup) -> str:
-        """Extract clean text content from HTML body only"""
+        """Extract clean text content focusing on main article content"""
         # Find the body tag, if it doesn't exist, use the whole document
         body = soup.find('body')
         if not body:
@@ -145,8 +145,46 @@ class SEOAnalyzer:
         for hidden in body.find_all(attrs={'style': re.compile(r'display\s*:\s*none', re.I)}):
             hidden.decompose()
         
-        # Get text content with better spacing from body only
-        text = body.get_text(separator=' ', strip=True)
+        # Remove common navigation and non-content elements
+        for elem in body.find_all(['nav', 'header', 'footer', 'aside']):
+            elem.decompose()
+        
+        # Remove elements with common non-content class names
+        for elem in body.find_all(attrs={'class': re.compile(r'nav|menu|sidebar|footer|header|ad|advertisement|banner|social|share|comment|related|breadcrumb', re.I)}):
+            elem.decompose()
+        
+        # Remove elements with common non-content IDs
+        for elem in body.find_all(attrs={'id': re.compile(r'nav|menu|sidebar|footer|header|ad|advertisement|banner|social|share|comment|related|breadcrumb', re.I)}):
+            elem.decompose()
+        
+        # Try to find main content area first
+        main_content = None
+        
+        # Look for semantic HTML5 main content
+        main_content = body.find('main')
+        if not main_content:
+            main_content = body.find('article')
+        
+        # Look for common content container classes
+        if not main_content:
+            for class_name in ['content', 'main-content', 'post-content', 'entry-content', 'article-content', 'page-content']:
+                main_content = body.find(attrs={'class': re.compile(class_name, re.I)})
+                if main_content:
+                    break
+        
+        # Look for common content container IDs
+        if not main_content:
+            for id_name in ['content', 'main-content', 'post-content', 'entry-content', 'article-content', 'page-content']:
+                main_content = body.find(attrs={'id': re.compile(id_name, re.I)})
+                if main_content:
+                    break
+        
+        # If no main content found, use body but try to filter out obvious non-content
+        if not main_content:
+            main_content = body
+        
+        # Get text content with better spacing from main content area
+        text = main_content.get_text(separator=' ', strip=True)
         
         # Clean up whitespace but preserve sentence structure
         text = re.sub(r'\s+', ' ', text)
@@ -252,8 +290,52 @@ class SEOAnalyzer:
         return False
     
     def _generate_clean_body_sample(self, text: str, max_length: int = 500) -> str:
-        """Generate a clean body text sample for analysis"""
+        """Generate a clean body text sample for analysis, focusing on article content"""
         # Remove extra whitespace and normalize
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Try to identify and skip common non-article content at the beginning
+        sentences = text.split('.')
+        filtered_sentences = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            # Skip very short sentences that might be navigation or metadata
+            if len(sentence) < 15:
+                continue
+                
+            # Skip sentences that look like navigation or metadata
+            skip_patterns = [
+                r'home\s*>\s*',  # breadcrumbs
+                r'posted\s+(on|by)',  # post metadata
+                r'share\s+(on|this)',  # social sharing
+                r'follow\s+us',  # social follow
+                r'subscribe\s+to',  # subscription
+                r'advertisement',  # ads
+                r'sponsored',  # sponsored content
+                r'continue\s+reading',  # read more links
+                r'related\s+(articles|posts)',  # related content
+                r'comment\s*\(',  # comment counts
+                r'tags?\s*:',  # tags
+                r'categories?\s*:',  # categories
+            ]
+            
+            sentence_lower = sentence.lower()
+            should_skip = any(re.search(pattern, sentence_lower) for pattern in skip_patterns)
+            
+            if not should_skip:
+                filtered_sentences.append(sentence)
+        
+        # Rejoin the filtered sentences
+        if filtered_sentences:
+            text = '. '.join(filtered_sentences)
+            if not text.endswith('.'):
+                text += '.'
+        
+        # Remove extra whitespace again
         text = re.sub(r'\s+', ' ', text).strip()
         
         # If text is shorter than max_length, return complete text
