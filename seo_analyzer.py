@@ -61,6 +61,12 @@ class SEOAnalyzer:
             # Generate clean body sample
             clean_body = self._generate_clean_body_sample(clean_text)
             
+            # Analyze keyword placement
+            keyword_placement = self._analyze_keyword_placement(soup, primary_keyword, title, headings, clean_text)
+            
+            # Analyze paragraph style
+            paragraph_style = self._analyze_paragraph_style(soup)
+            
             # Build result
             result = {
                 "url": url,
@@ -72,7 +78,9 @@ class SEOAnalyzer:
                 "relatedKWfreq": related_kw_freq,
                 "hasMedia": has_media,
                 "hasCTA": has_cta,
-                "cleanBody": clean_body
+                "cleanBody": clean_body,
+                "keywordPlacement": keyword_placement,
+                "paragraphStyle": paragraph_style
             }
             
             return result
@@ -243,10 +251,120 @@ class SEOAnalyzer:
         
         return False
     
-    def _generate_clean_body_sample(self, text: str, max_length: int = None) -> str:
-        """Generate complete clean body text for analysis"""
+    def _generate_clean_body_sample(self, text: str, max_length: int = 500) -> str:
+        """Generate a clean body text sample for analysis"""
         # Remove extra whitespace and normalize
         text = re.sub(r'\s+', ' ', text).strip()
         
-        # Return the complete text without any truncation
-        return text
+        # If text is shorter than max_length, return complete text
+        if len(text) <= max_length:
+            return text
+        
+        # For longer text, find a good breaking point
+        truncated = text[:max_length]
+        
+        # Try to break at sentence end
+        last_period = truncated.rfind('.')
+        last_exclamation = truncated.rfind('!')
+        last_question = truncated.rfind('?')
+        
+        best_break = max(last_period, last_exclamation, last_question)
+        
+        # If we found a good sentence break point, use it
+        if best_break > max_length * 0.7:
+            return truncated[:best_break + 1].strip()
+        
+        # Otherwise, break at last space and add ellipsis
+        last_space = truncated.rfind(' ')
+        if last_space > 0:
+            return truncated[:last_space].strip() + "..."
+        
+        return truncated + "..."
+    
+    def _analyze_keyword_placement(self, soup: BeautifulSoup, keyword: str, title: str, headings: List[str], text: str) -> Dict[str, Any]:
+        """Analyze keyword placement in different sections"""
+        if not keyword:
+            return {
+                "inTitle": False,
+                "inHeadings": False,
+                "inIntro": False,
+                "inBody": False,
+                "placement": []
+            }
+        
+        keyword_lower = keyword.lower()
+        placement = []
+        
+        # Check title
+        in_title = keyword_lower in title.lower()
+        if in_title:
+            placement.append("title")
+        
+        # Check headings
+        in_headings = any(keyword_lower in heading.lower() for heading in headings)
+        if in_headings:
+            placement.append("headings")
+        
+        # Check intro (first 200 characters of body text)
+        intro_text = text[:200].lower()
+        in_intro = keyword_lower in intro_text
+        if in_intro:
+            placement.append("intro")
+        
+        # Check body content
+        in_body = keyword_lower in text.lower()
+        if in_body and not in_intro:
+            placement.append("body")
+        
+        return {
+            "inTitle": in_title,
+            "inHeadings": in_headings,
+            "inIntro": in_intro,
+            "inBody": in_body,
+            "placement": placement
+        }
+    
+    def _analyze_paragraph_style(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """Analyze paragraph style and structure"""
+        # Find body tag
+        body = soup.find('body')
+        if not body:
+            body = soup
+        
+        # Find all paragraphs
+        paragraphs = body.find_all('p')
+        
+        # Calculate paragraph lengths
+        paragraph_lengths = []
+        for p in paragraphs:
+            text = p.get_text().strip()
+            if text:  # Only count non-empty paragraphs
+                words = len(text.split())
+                paragraph_lengths.append(words)
+        
+        # Calculate average paragraph length
+        avg_length = sum(paragraph_lengths) / len(paragraph_lengths) if paragraph_lengths else 0
+        
+        # Check for bullet points and lists
+        bullet_lists = body.find_all(['ul', 'ol'])
+        has_bullets = len(bullet_lists) > 0
+        
+        # Count list items
+        list_items = body.find_all('li')
+        bullet_count = len(list_items)
+        
+        # Analyze paragraph distribution
+        short_paragraphs = sum(1 for length in paragraph_lengths if length < 20)
+        medium_paragraphs = sum(1 for length in paragraph_lengths if 20 <= length < 50)
+        long_paragraphs = sum(1 for length in paragraph_lengths if length >= 50)
+        
+        return {
+            "avgParagraphLength": round(avg_length, 1),
+            "totalParagraphs": len(paragraph_lengths),
+            "shortParagraphs": short_paragraphs,
+            "mediumParagraphs": medium_paragraphs,
+            "longParagraphs": long_paragraphs,
+            "hasBullets": has_bullets,
+            "bulletCount": bullet_count,
+            "listTypes": len(bullet_lists)
+        }
