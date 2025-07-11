@@ -1,26 +1,23 @@
-import json
-import os
-import logging
-from seo_analyzer import SEOAnalyzer
 from apify import Actor
 from seo_analyzer import SEOAnalyzer
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import logging
 
 async def main():
     async with Actor:
-        # Get input
         data = await Actor.get_input() or {}
 
-        # Extract fields
+        logging.info(f"Received input: {data}")
+
         html_content = data.get("html", "")
         url = data.get("url", "")
         primary_keyword = data.get("primaryKeyword", "")
         related_keywords = data.get("relatedKeywords", [])
 
-        # Run analysis
+        if not html_content:
+            logging.warning("No HTML content provided. Skipping analysis.")
+            await Actor.set_value("OUTPUT", {"error": "No HTML content provided"})
+            return
+
         analyzer = SEOAnalyzer()
         result = analyzer.analyze(
             html_content=html_content,
@@ -29,9 +26,8 @@ async def main():
             related_keywords=related_keywords,
         )
 
-        # Save result
+        logging.info(f"Analysis result: {result}")
         await Actor.set_value("OUTPUT", result)
-
 
 if __name__ == "__main__":
     import asyncio
